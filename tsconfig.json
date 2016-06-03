@@ -12,17 +12,14 @@
     "exclude": [
         "node_modules"
     ],
-    "files": [
-      "test/bootstrap.ts",
-      "test/vendor.ts"
-    ],
+
     "filesGlob": [
         "test/**/*.ts",
         "test/**/*.tsx",
         "!node_modules/**",
         "typings/index.d.ts"
     ],
-    "compileOnSave": false,
+    "compileOnSave": true,
     "atom": {
         "rewriteTsconfig": false
     }
