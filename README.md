@@ -2,7 +2,7 @@
 
 ## Projet de test
 
-Typescript, Webpack
+typings, webpack-dev-server, webpack
 
 
 TODO

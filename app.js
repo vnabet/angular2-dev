@@ -44,6 +44,7 @@
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
+	"use strict";
 	var platform_browser_dynamic_1 = __webpack_require__(1);
 	var app_1 = __webpack_require__(280);
 	platform_browser_dynamic_1.bootstrap(app_1.App);
@@ -7870,158 +7871,204 @@
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
 	var Observable_1 = __webpack_require__(41);
-	var Subscriber_1 = __webpack_require__(45);
-	var Subscription_1 = __webpack_require__(47);
-	var ObjectUnsubscribedError_1 = __webpack_require__(57);
-	var SubjectSubscription_1 = __webpack_require__(58);
+	var Subscriber_1 = __webpack_require__(46);
+	var Subscription_1 = __webpack_require__(48);
+	var SubjectSubscription_1 = __webpack_require__(56);
 	var rxSubscriber_1 = __webpack_require__(54);
-	/**
-	 * @class SubjectSubscriber<T>
-	 */
-	var SubjectSubscriber = (function (_super) {
-	    __extends(SubjectSubscriber, _super);
-	    function SubjectSubscriber(destination) {
-	        _super.call(this, destination);
-	        this.destination = destination;
-	    }
-	    return SubjectSubscriber;
-	}(Subscriber_1.Subscriber));
-	exports.SubjectSubscriber = SubjectSubscriber;
+	var throwError_1 = __webpack_require__(57);
+	var ObjectUnsubscribedError_1 = __webpack_require__(58);
 	/**
 	 * @class Subject<T>
 	 */
 	var Subject = (function (_super) {
 	    __extends(Subject, _super);
-	    function Subject() {
+	    function Subject(destination, source) {
 	        _super.call(this);
+	        this.destination = destination;
+	        this.source = source;
 	        this.observers = [];
 	        this.isUnsubscribed = false;
 	        this.isStopped = false;
-	        this.hasError = false;
-	        this.thrownError = null;
+	        this.hasErrored = false;
+	        this.dispatching = false;
+	        this.hasCompleted = false;
+	        this.source = source;
 	    }
-	    Subject.prototype[rxSubscriber_1.$$rxSubscriber] = function () {
-	        return new SubjectSubscriber(this);
-	    };
 	    Subject.prototype.lift = function (operator) {
-	        var subject = new AnonymousSubject(this, this);
+	        var subject = new Subject(this.destination || this, this);
 	        subject.operator = operator;
 	        return subject;
 	    };
-	    Subject.prototype.next = function (value) {
-	        if (this.isUnsubscribed) {
-	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+	    Subject.prototype.add = function (subscription) {
+	        return Subscription_1.Subscription.prototype.add.call(this, subscription);
+	    };
+	    Subject.prototype.remove = function (subscription) {
+	        Subscription_1.Subscription.prototype.remove.call(this, subscription);
+	    };
+	    Subject.prototype.unsubscribe = function () {
+	        Subscription_1.Subscription.prototype.unsubscribe.call(this);
+	    };
+	    Subject.prototype._subscribe = function (subscriber) {
+	        if (this.source) {
+	            return this.source.subscribe(subscriber);
 	        }
-	        if (!this.isStopped) {
-	            var observers = this.observers;
-	            var len = observers.length;
-	            var copy = observers.slice();
-	            for (var i = 0; i < len; i++) {
-	                copy[i].next(value);
+	        else {
+	            if (subscriber.isUnsubscribed) {
+	                return;
 	            }
+	            else if (this.hasErrored) {
+	                return subscriber.error(this.errorValue);
+	            }
+	            else if (this.hasCompleted) {
+	                return subscriber.complete();
+	            }
+	            this.throwIfUnsubscribed();
+	            var subscription = new SubjectSubscription_1.SubjectSubscription(this, subscriber);
+	            this.observers.push(subscriber);
+	            return subscription;
+	        }
+	    };
+	    Subject.prototype._unsubscribe = function () {
+	        this.source = null;
+	        this.isStopped = true;
+	        this.observers = null;
+	        this.destination = null;
+	    };
+	    Subject.prototype.next = function (value) {
+	        this.throwIfUnsubscribed();
+	        if (this.isStopped) {
+	            return;
+	        }
+	        this.dispatching = true;
+	        this._next(value);
+	        this.dispatching = false;
+	        if (this.hasErrored) {
+	            this._error(this.errorValue);
+	        }
+	        else if (this.hasCompleted) {
+	            this._complete();
 	        }
 	    };
 	    Subject.prototype.error = function (err) {
-	        if (this.isUnsubscribed) {
-	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+	        this.throwIfUnsubscribed();
+	        if (this.isStopped) {
+	            return;
 	        }
-	        this.hasError = true;
-	        this.thrownError = err;
 	        this.isStopped = true;
-	        var observers = this.observers;
-	        var len = observers.length;
-	        var copy = observers.slice();
-	        for (var i = 0; i < len; i++) {
-	            copy[i].error(err);
+	        this.hasErrored = true;
+	        this.errorValue = err;
+	        if (this.dispatching) {
+	            return;
 	        }
-	        this.observers.length = 0;
+	        this._error(err);
 	    };
 	    Subject.prototype.complete = function () {
-	        if (this.isUnsubscribed) {
-	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
+	        this.throwIfUnsubscribed();
+	        if (this.isStopped) {
+	            return;
 	        }
 	        this.isStopped = true;
-	        var observers = this.observers;
-	        var len = observers.length;
-	        var copy = observers.slice();
-	        for (var i = 0; i < len; i++) {
-	            copy[i].complete();
+	        this.hasCompleted = true;
+	        if (this.dispatching) {
+	            return;
 	        }
-	        this.observers.length = 0;
-	    };
-	    Subject.prototype.unsubscribe = function () {
-	        this.isStopped = true;
-	        this.isUnsubscribed = true;
-	        this.observers = null;
-	    };
-	    Subject.prototype._subscribe = function (subscriber) {
-	        if (this.isUnsubscribed) {
-	            throw new ObjectUnsubscribedError_1.ObjectUnsubscribedError();
-	        }
-	        else if (this.hasError) {
-	            subscriber.error(this.thrownError);
-	            return Subscription_1.Subscription.EMPTY;
-	        }
-	        else if (this.isStopped) {
-	            subscriber.complete();
-	            return Subscription_1.Subscription.EMPTY;
-	        }
-	        else {
-	            this.observers.push(subscriber);
-	            return new SubjectSubscription_1.SubjectSubscription(this, subscriber);
-	        }
+	        this._complete();
 	    };
 	    Subject.prototype.asObservable = function () {
-	        var observable = new Observable_1.Observable();
-	        observable.source = this;
+	        var observable = new SubjectObservable(this);
 	        return observable;
 	    };
+	    Subject.prototype._next = function (value) {
+	        if (this.destination) {
+	            this.destination.next(value);
+	        }
+	        else {
+	            this._finalNext(value);
+	        }
+	    };
+	    Subject.prototype._finalNext = function (value) {
+	        var index = -1;
+	        var observers = this.observers.slice(0);
+	        var len = observers.length;
+	        while (++index < len) {
+	            observers[index].next(value);
+	        }
+	    };
+	    Subject.prototype._error = function (err) {
+	        if (this.destination) {
+	            this.destination.error(err);
+	        }
+	        else {
+	            this._finalError(err);
+	        }
+	    };
+	    Subject.prototype._finalError = function (err) {
+	        var index = -1;
+	        var observers = this.observers;
+	        // optimization to block our SubjectSubscriptions from
+	        // splicing themselves out of the observers list one by one.
+	        this.observers = null;
+	        this.isUnsubscribed = true;
+	        if (observers) {
+	            var len = observers.length;
+	            while (++index < len) {
+	                observers[index].error(err);
+	            }
+	        }
+	        this.isUnsubscribed = false;
+	        this.unsubscribe();
+	    };
+	    Subject.prototype._complete = function () {
+	        if (this.destination) {
+	            this.destination.complete();
+	        }
+	        else {
+	            this._finalComplete();
+	        }
+	    };
+	    Subject.prototype._finalComplete = function () {
+	        var index = -1;
+	        var observers = this.observers;
+	        // optimization to block our SubjectSubscriptions from
+	        // splicing themselves out of the observers list one by one.
+	        this.observers = null;
+	        this.isUnsubscribed = true;
+	        if (observers) {
+	            var len = observers.length;
+	            while (++index < len) {
+	                observers[index].complete();
+	            }
+	        }
+	        this.isUnsubscribed = false;
+	        this.unsubscribe();
+	    };
+	    Subject.prototype.throwIfUnsubscribed = function () {
+	        if (this.isUnsubscribed) {
+	            throwError_1.throwError(new ObjectUnsubscribedError_1.ObjectUnsubscribedError());
+	        }
+	    };
+	    Subject.prototype[rxSubscriber_1.$$rxSubscriber] = function () {
+	        return new Subscriber_1.Subscriber(this);
+	    };
 	    Subject.create = function (destination, source) {
-	        return new AnonymousSubject(destination, source);
+	        return new Subject(destination, source);
 	    };
 	    return Subject;
 	}(Observable_1.Observable));
 	exports.Subject = Subject;
 	/**
-	 * @class AnonymousSubject<T>
+	 * We need this JSDoc comment for affecting ESDoc.
+	 * @ignore
+	 * @extends {Ignored}
 	 */
-	var AnonymousSubject = (function (_super) {
-	    __extends(AnonymousSubject, _super);
-	    function AnonymousSubject(destination, source) {
+	var SubjectObservable = (function (_super) {
+	    __extends(SubjectObservable, _super);
+	    function SubjectObservable(source) {
 	        _super.call(this);
-	        this.destination = destination;
 	        this.source = source;
 	    }
-	    AnonymousSubject.prototype.next = function (value) {
-	        var destination = this.destination;
-	        if (destination && destination.next) {
-	            destination.next(value);
-	        }
-	    };
-	    AnonymousSubject.prototype.error = function (err) {
-	        var destination = this.destination;
-	        if (destination && destination.error) {
-	            this.destination.error(err);
-	        }
-	    };
-	    AnonymousSubject.prototype.complete = function () {
-	        var destination = this.destination;
-	        if (destination && destination.complete) {
-	            this.destination.complete();
-	        }
-	    };
-	    AnonymousSubject.prototype._subscribe = function (subscriber) {
-	        var source = this.source;
-	        if (source) {
-	            return this.source.subscribe(subscriber);
-	        }
-	        else {
-	            return Subscription_1.Subscription.EMPTY;
-	        }
-	    };
-	    return AnonymousSubject;
-	}(Subject));
-	exports.AnonymousSubject = AnonymousSubject;
+	    return SubjectObservable;
+	}(Observable_1.Observable));
 	//# sourceMappingURL=Subject.js.map
 
 /***/ },
@@ -8030,8 +8077,8 @@
 
 	"use strict";
 	var root_1 = __webpack_require__(42);
-	var toSubscriber_1 = __webpack_require__(44);
-	var $$observable = __webpack_require__(55);
+	var observable_1 = __webpack_require__(44);
+	var toSubscriber_1 = __webpack_require__(45);
 	/**
 	 * A representation of any set of values over any amount of time. This the most basic building block
 	 * of RxJS.
@@ -8079,12 +8126,7 @@
 	    Observable.prototype.subscribe = function (observerOrNext, error, complete) {
 	        var operator = this.operator;
 	        var sink = toSubscriber_1.toSubscriber(observerOrNext, error, complete);
-	        if (operator) {
-	            operator.call(sink, this);
-	        }
-	        else {
-	            sink.add(this._subscribe(sink));
-	        }
+	        sink.add(operator ? operator.call(sink, this) : this._subscribe(sink));
 	        if (sink.syncErrorThrowable) {
 	            sink.syncErrorThrowable = false;
 	            if (sink.syncErrorThrown) {
@@ -8148,7 +8190,7 @@
 	     * @method Symbol.observable
 	     * @return {Observable} this instance of the observable
 	     */
-	    Observable.prototype[$$observable] = function () {
+	    Observable.prototype[observable_1.$$observable] = function () {
 	        return this;
 	    };
 	    // HACK: Since TypeScript inherits static properties too, we have to
@@ -8214,19 +8256,42 @@
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var Subscriber_1 = __webpack_require__(45);
+	var root_1 = __webpack_require__(42);
+	var Symbol = root_1.root.Symbol;
+	if (typeof Symbol === 'function') {
+	    if (Symbol.observable) {
+	        exports.$$observable = Symbol.observable;
+	    }
+	    else {
+	        if (typeof Symbol.for === 'function') {
+	            exports.$$observable = Symbol.for('observable');
+	        }
+	        else {
+	            exports.$$observable = Symbol('observable');
+	        }
+	        Symbol.observable = exports.$$observable;
+	    }
+	}
+	else {
+	    exports.$$observable = '@@observable';
+	}
+	//# sourceMappingURL=observable.js.map
+
+/***/ },
+/* 45 */
+/***/ function(module, exports, __webpack_require__) {
+
+	"use strict";
+	var Subscriber_1 = __webpack_require__(46);
 	var rxSubscriber_1 = __webpack_require__(54);
 	function toSubscriber(nextOrObserver, error, complete) {
-	    if (nextOrObserver) {
+	    if (nextOrObserver && typeof nextOrObserver === 'object') {
 	        if (nextOrObserver instanceof Subscriber_1.Subscriber) {
 	            return nextOrObserver;
 	        }
-	        if (nextOrObserver[rxSubscriber_1.$$rxSubscriber]) {
+	        else if (typeof nextOrObserver[rxSubscriber_1.$$rxSubscriber] === 'function') {
 	            return nextOrObserver[rxSubscriber_1.$$rxSubscriber]();
 	        }
-	    }
-	    if (!nextOrObserver && !error && !complete) {
-	        return new Subscriber_1.Subscriber();
 	    }
 	    return new Subscriber_1.Subscriber(nextOrObserver, error, complete);
 	}
@@ -8234,7 +8299,7 @@
 	//# sourceMappingURL=toSubscriber.js.map
 
 /***/ },
-/* 45 */
+/* 46 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
@@ -8243,10 +8308,10 @@
 	    function __() { this.constructor = d; }
 	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-	var isFunction_1 = __webpack_require__(46);
-	var Subscription_1 = __webpack_require__(47);
-	var Observer_1 = __webpack_require__(53);
+	var isFunction_1 = __webpack_require__(47);
+	var Subscription_1 = __webpack_require__(48);
 	var rxSubscriber_1 = __webpack_require__(54);
+	var Observer_1 = __webpack_require__(55);
 	/**
 	 * Implements the {@link Observer} interface and extends the
 	 * {@link Subscription} class. While the {@link Observer} is the public API for
@@ -8299,7 +8364,6 @@
 	                break;
 	        }
 	    }
-	    Subscriber.prototype[rxSubscriber_1.$$rxSubscriber] = function () { return this; };
 	    /**
 	     * A static factory for a Subscriber, given a (potentially partial) definition
 	     * of an Observer.
@@ -8370,6 +8434,9 @@
 	    Subscriber.prototype._complete = function () {
 	        this.destination.complete();
 	        this.unsubscribe();
+	    };
+	    Subscriber.prototype[rxSubscriber_1.$$rxSubscriber] = function () {
+	        return this;
 	    };
 	    return Subscriber;
 	}(Subscription_1.Subscription));
@@ -8488,7 +8555,7 @@
 	//# sourceMappingURL=Subscriber.js.map
 
 /***/ },
-/* 46 */
+/* 47 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8499,16 +8566,16 @@
 	//# sourceMappingURL=isFunction.js.map
 
 /***/ },
-/* 47 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var isArray_1 = __webpack_require__(48);
-	var isObject_1 = __webpack_require__(49);
-	var isFunction_1 = __webpack_require__(46);
-	var tryCatch_1 = __webpack_require__(50);
-	var errorObject_1 = __webpack_require__(51);
-	var UnsubscriptionError_1 = __webpack_require__(52);
+	var isArray_1 = __webpack_require__(49);
+	var isObject_1 = __webpack_require__(50);
+	var isFunction_1 = __webpack_require__(47);
+	var tryCatch_1 = __webpack_require__(51);
+	var errorObject_1 = __webpack_require__(52);
+	var UnsubscriptionError_1 = __webpack_require__(53);
 	/**
 	 * Represents a disposable resource, such as the execution of an Observable. A
 	 * Subscription has one important method, `unsubscribe`, that takes no argument
@@ -8654,7 +8721,7 @@
 	//# sourceMappingURL=Subscription.js.map
 
 /***/ },
-/* 48 */
+/* 49 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8662,7 +8729,7 @@
 	//# sourceMappingURL=isArray.js.map
 
 /***/ },
-/* 49 */
+/* 50 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8673,11 +8740,11 @@
 	//# sourceMappingURL=isObject.js.map
 
 /***/ },
-/* 50 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
 	"use strict";
-	var errorObject_1 = __webpack_require__(51);
+	var errorObject_1 = __webpack_require__(52);
 	var tryCatchTarget;
 	function tryCatcher() {
 	    try {
@@ -8697,7 +8764,7 @@
 	//# sourceMappingURL=tryCatch.js.map
 
 /***/ },
-/* 51 */
+/* 52 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8706,7 +8773,7 @@
 	//# sourceMappingURL=errorObject.js.map
 
 /***/ },
-/* 52 */
+/* 53 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8733,19 +8800,6 @@
 	//# sourceMappingURL=UnsubscriptionError.js.map
 
 /***/ },
-/* 53 */
-/***/ function(module, exports) {
-
-	"use strict";
-	exports.empty = {
-	    isUnsubscribed: true,
-	    next: function (value) { },
-	    error: function (err) { throw err; },
-	    complete: function () { }
-	};
-	//# sourceMappingURL=Observer.js.map
-
-/***/ },
 /* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -8758,42 +8812,73 @@
 
 /***/ },
 /* 55 */
-/***/ function(module, exports, __webpack_require__) {
+/***/ function(module, exports) {
 
-	/* WEBPACK VAR INJECTION */(function(global) {/* global window */
-	'use strict';
-
-	module.exports = __webpack_require__(56)(global || window || this);
-
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
+	"use strict";
+	exports.empty = {
+	    isUnsubscribed: true,
+	    next: function (value) { },
+	    error: function (err) { throw err; },
+	    complete: function () { }
+	};
+	//# sourceMappingURL=Observer.js.map
 
 /***/ },
 /* 56 */
-/***/ function(module, exports) {
+/***/ function(module, exports, __webpack_require__) {
 
-	'use strict';
-
-	module.exports = function symbolObservablePonyfill(root) {
-		var result;
-		var Symbol = root.Symbol;
-
-		if (typeof Symbol === 'function') {
-			if (Symbol.observable) {
-				result = Symbol.observable;
-			} else {
-				result = Symbol('observable');
-				Symbol.observable = result;
-			}
-		} else {
-			result = '@@observable';
-		}
-
-		return result;
+	"use strict";
+	var __extends = (this && this.__extends) || function (d, b) {
+	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+	    function __() { this.constructor = d; }
+	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 	};
-
+	var Subscription_1 = __webpack_require__(48);
+	/**
+	 * We need this JSDoc comment for affecting ESDoc.
+	 * @ignore
+	 * @extends {Ignored}
+	 */
+	var SubjectSubscription = (function (_super) {
+	    __extends(SubjectSubscription, _super);
+	    function SubjectSubscription(subject, observer) {
+	        _super.call(this);
+	        this.subject = subject;
+	        this.observer = observer;
+	        this.isUnsubscribed = false;
+	    }
+	    SubjectSubscription.prototype.unsubscribe = function () {
+	        if (this.isUnsubscribed) {
+	            return;
+	        }
+	        this.isUnsubscribed = true;
+	        var subject = this.subject;
+	        var observers = subject.observers;
+	        this.subject = null;
+	        if (!observers || observers.length === 0 || subject.isUnsubscribed) {
+	            return;
+	        }
+	        var subscriberIndex = observers.indexOf(this.observer);
+	        if (subscriberIndex !== -1) {
+	            observers.splice(subscriberIndex, 1);
+	        }
+	    };
+	    return SubjectSubscription;
+	}(Subscription_1.Subscription));
+	exports.SubjectSubscription = SubjectSubscription;
+	//# sourceMappingURL=SubjectSubscription.js.map
 
 /***/ },
 /* 57 */
+/***/ function(module, exports) {
+
+	"use strict";
+	function throwError(e) { throw e; }
+	exports.throwError = throwError;
+	//# sourceMappingURL=throwError.js.map
+
+/***/ },
+/* 58 */
 /***/ function(module, exports) {
 
 	"use strict";
@@ -8823,51 +8908,6 @@
 	//# sourceMappingURL=ObjectUnsubscribedError.js.map
 
 /***/ },
-/* 58 */
-/***/ function(module, exports, __webpack_require__) {
-
-	"use strict";
-	var __extends = (this && this.__extends) || function (d, b) {
-	    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
-	    function __() { this.constructor = d; }
-	    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-	};
-	var Subscription_1 = __webpack_require__(47);
-	/**
-	 * We need this JSDoc comment for affecting ESDoc.
-	 * @ignore
-	 * @extends {Ignored}
-	 */
-	var SubjectSubscription = (function (_super) {
-	    __extends(SubjectSubscription, _super);
-	    function SubjectSubscription(subject, subscriber) {
-	        _super.call(this);
-	        this.subject = subject;
-	        this.subscriber = subscriber;
-	        this.isUnsubscribed = false;
-	    }
-	    SubjectSubscription.prototype.unsubscribe = function () {
-	        if (this.isUnsubscribed) {
-	            return;
-	        }
-	        this.isUnsubscribed = true;
-	        var subject = this.subject;
-	        var observers = subject.observers;
-	        this.subject = null;
-	        if (!observers || observers.length === 0 || subject.isStopped || subject.isUnsubscribed) {
-	            return;
-	        }
-	        var subscriberIndex = observers.indexOf(this.subscriber);
-	        if (subscriberIndex !== -1) {
-	            observers.splice(subscriberIndex, 1);
-	        }
-	    };
-	    return SubjectSubscription;
-	}(Subscription_1.Subscription));
-	exports.SubjectSubscription = SubjectSubscription;
-	//# sourceMappingURL=SubjectSubscription.js.map
-
-/***/ },
 /* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
@@ -8893,27 +8933,9 @@
 	        this.scheduler = scheduler;
 	    }
 	    /**
-	     * Converts a Promise to an Observable.
-	     *
-	     * <span class="informal">Returns an Observable that just emits the Promise's
-	     * resolved value, then completes.</span>
-	     *
-	     * Converts an ES2015 Promise or a Promises/A+ spec compliant Promise to an
-	     * Observable. If the Promise resolves with a value, the output Observable
-	     * emits that resolved value as a `next`, and then completes. If the Promise
-	     * is rejected, then the output Observable emits the corresponding Error.
-	     *
-	     * @example <caption>Convert the Promise returned by Fetch to an Observable</caption>
-	     * var result = Rx.Observable.fromPromise(fetch('http://myserver.com/'));
-	     * result.subscribe(x => console.log(x), e => console.error(e));
-	     *
-	     * @see {@link bindCallback}
-	     * @see {@link from}
-	     *
-	     * @param {Promise<T>} promise The promise to be converted.
-	     * @param {Scheduler} [scheduler] An optional Scheduler to use for scheduling
-	     * the delivery of the resolved value (or the rejection).
-	     * @return {Observable<T>} An Observable which wraps the Promise.
+	     * @param promise
+	     * @param scheduler
+	     * @return {PromiseObservable}
 	     * @static true
 	     * @name fromPromise
 	     * @owner Observable
@@ -39294,13 +39316,12 @@
 /* 280 */
 /***/ function(module, exports, __webpack_require__) {
 
+	"use strict";
 	var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
-	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") return Reflect.decorate(decorators, target, key, desc);
-	    switch (arguments.length) {
-	        case 2: return decorators.reduceRight(function(o, d) { return (d && d(o)) || o; }, target);
-	        case 3: return decorators.reduceRight(function(o, d) { return (d && d(target, key)), void 0; }, void 0);
-	        case 4: return decorators.reduceRight(function(o, d) { return (d && d(target, key, o)) || o; }, desc);
-	    }
+	    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+	    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+	    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+	    return c > 3 && r && Object.defineProperty(target, key, r), r;
 	};
 	var __metadata = (this && this.__metadata) || function (k, v) {
 	    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
@@ -39310,17 +39331,25 @@
 	    function App() {
 	        console.log('toto');
 	    }
+	    App.prototype.ngOnInit = function () {
+	    };
 	    App = __decorate([
 	        core_1.Component({
 	            selector: 'app',
-	            template: '<h1>hello</h1>'
+	            template: __webpack_require__(281),
 	        }), 
 	        __metadata('design:paramtypes', [])
 	    ], App);
 	    return App;
-	})();
+	}());
 	exports.App = App;
 
+
+/***/ },
+/* 281 */
+/***/ function(module, exports) {
+
+	module.exports = "<h1>VINCENT le roi de la fête</h1>\n"
 
 /***/ }
 /******/ ]);

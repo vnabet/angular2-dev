@@ -1,13 +1,17 @@
-import {Component} from '@angular/core';
+import {Component, OnInit} from '@angular/core';
 import {Observable} from 'rxjs/Rx';
 
 @Component({
   selector: 'app',
-  template: '<h1>hello</h1>'
+  template: require('./app.html'),
 })
-export class App {
+export class App implements OnInit {
   constructor() {
     console.log('toto');
+  }
+
+  ngOnInit() {
+    
   }
 
 }

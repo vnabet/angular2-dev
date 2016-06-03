@@ -17,9 +17,10 @@
         "test/**/*.ts",
         "test/**/*.tsx",
         "!node_modules/**",
-        "typings/index.d.ts"
+        "typings/index.d.ts",
+        "custom-typings.d.ts"
     ],
-    "compileOnSave": true,
+    "compileOnSave": false,
     "atom": {
         "rewriteTsconfig": false
     }

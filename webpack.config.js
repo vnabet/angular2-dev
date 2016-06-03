@@ -4,8 +4,9 @@ const ForkCheckerPlugin = require('awesome-typescript-loader').ForkCheckerPlugin
 
 module.exports = {
     entry: {
-      app: './test/bootstrap.ts',
-      //vendor: './test/vendor.ts'
+      polyfills: './test/polyfills.ts',
+      vendor: './test/vendor.ts',
+      app: './test/bootstrap.ts'
     },
     //entry: './test/bootstrap.ts',
     resolve: {
@@ -23,6 +24,11 @@ module.exports = {
         {
           test: /\.tsx?$/,
           loader: 'awesome-typescript-loader'
+        },
+        {
+          test: /\.html$/,
+          loader: 'raw-loader',
+          exclude: ['index.html']
         }/*,
         {
           test: /\.css$/,
