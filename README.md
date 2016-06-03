@@ -1,4 +1,11 @@
-# electron-quick-start + angular 2 + webpack -- Projet de test
+# electron-quick-start + angular 2 + webpack
+
+## Projet de test
+
+Typescript, Webpack
+
+
+TODO
 
 **Clone and run for a quick way to see an Electron in action.**
 
