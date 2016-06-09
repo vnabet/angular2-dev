@@ -3,7 +3,7 @@ import {Observable} from 'rxjs/Rx';
 
 @Component({
   selector: 'app',
-  template: require('./app.html'),
+  template: require('./test.html'),
 })
 export class App implements OnInit {
   constructor() {
@@ -11,7 +11,7 @@ export class App implements OnInit {
   }
 
   ngOnInit() {
-    
+
   }
 
 }

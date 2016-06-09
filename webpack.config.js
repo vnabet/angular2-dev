@@ -2,11 +2,15 @@ const webpack = require('webpack');
 const ForkCheckerPlugin = require('awesome-typescript-loader').ForkCheckerPlugin;
 const UglifyJsPlugin = require('webpack/lib/optimize/UglifyJsPlugin');
 
+
+var path = require('path');
+
 module.exports = {
+  context: path.resolve('./src'),
     entry: {
-      polyfills: './src/polyfills.ts',
-      vendor: './src/vendor.ts',
-      app: './src/bootstrap.ts'
+      polyfills: './polyfills',
+      vendor: './vendor',
+      app: './bootstrap'
     },
     //entry: './test/bootstrap.ts',
     resolve: {
@@ -17,7 +21,8 @@ module.exports = {
       '@angular': './node_modules/@angular'
     },*/
     output: {
-        path: 'built',
+        path: path.resolve('./built'),
+        publicPath:'built/assets/js',
         filename: '[name].bundle.js',
         sourceMapFilename: '[name].map',
     },
@@ -40,6 +45,9 @@ module.exports = {
     },
     plugins: [
       new ForkCheckerPlugin(),
+      new webpack.optimize.CommonsChunkPlugin({
+      name: ['polyfills', 'vendor'].reverse()
+    })
       /*new UglifyJsPlugin({
         // beautify: true, //debug
         // mangle: false, //debug
